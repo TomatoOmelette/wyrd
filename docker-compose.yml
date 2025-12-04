@@ -1,0 +1,45 @@
+services:
+  wyrd:
+    build: .
+    volumes:
+      # User's content (read-only by default for safety)
+      - ./knowledge:/app/knowledge:ro
+      # Persistent storage for indexes
+      - wyrd-storage:/app/storage
+      # Cache for embeddings model
+      - wyrd-cache:/root/.cache/huggingface
+    environment:
+      - WYRD_EMBEDDING_MODEL=all-MiniLM-L6-v2
+      - WYRD_SYNTHESIS_PROVIDER=none  # none, ollama, openai, anthropic
+      # Uncomment to use Ollama for synthesis:
+      # - WYRD_SYNTHESIS_PROVIDER=ollama
+      # - WYRD_OLLAMA_HOST=http://ollama:11434
+    # For interactive MCP mode (default):
+    stdin_open: true
+    tty: true
+
+    # Uncomment for HTTP API mode:
+    # ports:
+    #   - "8576:8576"
+    # command: ["serve", "--transport", "http", "--port", "8576"]
+
+  # Optional: local LLM for synthesis
+  # Enable with: docker compose --profile with-ollama up
+  ollama:
+    image: ollama/ollama
+    volumes:
+      - ollama-models:/root/.ollama
+    profiles: ["with-ollama"]
+    # Uncomment for GPU support (NVIDIA):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  wyrd-storage:
+  wyrd-cache:
+  ollama-models:

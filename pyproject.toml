@@ -1,0 +1,113 @@
+[project]
+name = "wyrd"
+version = "0.1.0"
+description = "Personal book knowledge system with semantic search, knowledge graphs, and MCP integration"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [
+    { name = "Jonathan Greeley" }
+]
+keywords = ["knowledge-base", "rag", "mcp", "semantic-search", "books", "ebooks"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: Indexing",
+]
+
+dependencies = [
+    # MCP
+    "mcp>=1.0",
+
+    # Vector search
+    "chromadb>=0.4",
+    "sentence-transformers>=2.2",
+
+    # Knowledge graph
+    "networkx>=3.0",
+
+    # Book parsing
+    "ebooklib>=0.18",
+    "pymupdf>=1.23",
+
+    # Data
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+
+    # CLI
+    "typer>=0.9",
+    "rich>=13.0",
+
+    # Async
+    "anyio>=4.0",
+    "httpx>=0.25",
+]
+
+[project.optional-dependencies]
+ollama = ["ollama>=0.1"]
+openai = ["openai>=1.0"]
+anthropic = ["anthropic>=0.18"]
+postgres = ["psycopg[binary]>=3.1", "pgvector>=0.2"]
+neo4j = ["neo4j>=5.0"]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "ruff>=0.1",
+    "mypy>=1.0",
+]
+all = [
+    "wyrd[ollama,openai,anthropic,dev]",
+]
+
+[project.scripts]
+wyrd = "wyrd.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/username/wyrd"
+Documentation = "https://github.com/username/wyrd#readme"
+Repository = "https://github.com/username/wyrd"
+Issues = "https://github.com/username/wyrd/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wyrd"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["wyrd"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
