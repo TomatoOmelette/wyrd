@@ -33,6 +33,8 @@ dependencies = [
     # Book parsing
     "ebooklib>=0.18",
     "pymupdf>=1.23",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
 
     # Data
     "pyyaml>=6.0",
@@ -64,7 +66,7 @@ all = [
 ]
 
 [project.scripts]
-wyrd = "wyrd.cli:main"
+wyrd = "wyrd.cli:cli"
 
 [project.urls]
 Homepage = "https://github.com/username/wyrd"
