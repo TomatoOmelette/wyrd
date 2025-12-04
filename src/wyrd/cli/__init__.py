@@ -56,6 +56,7 @@ def add(
     author: str = typer.Option(None, "--author", "-a", help="Author name (auto-detected if omitted)"),
     chunk_size: int = typer.Option(512, "--chunk-size", help="Chunk size in characters"),
     chunk_overlap: int = typer.Option(50, "--chunk-overlap", help="Overlap between chunks"),
+    extract_topics: bool = typer.Option(False, "--extract-topics", "-T", help="Extract topics from content"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompts"),
 ) -> None:
     """Add a book to the knowledge base."""
@@ -164,6 +165,41 @@ def add(
             ],
         )
         metadata_store.update_chunk_count(book_slug, len(all_chunks))
+
+        # Extract topics if requested
+        if extract_topics:
+            progress.update(task, description="Extracting topics...")
+            from wyrd.core.topics import TopicExtractor, TopicRegistry
+
+            extractor = TopicExtractor(max_topics=15, min_occurrences=2)
+            registry = TopicRegistry()
+
+            # Extract topics from each chunk
+            chunk_data = [(c.id, c.content) for c in all_chunks]
+            topic_chunks = extractor.extract_from_chunks(chunk_data, subject=book_subject)
+
+            # Register topics and occurrences
+            topic_count = 0
+            for topic_id, occurrences in topic_chunks.items():
+                # Create a display name from the topic ID
+                display_name = topic_id.replace("-", " ").title()
+
+                registry.add_topic(
+                    topic_id=topic_id,
+                    display_name=display_name,
+                    subject=book_subject,
+                )
+
+                for chunk_id, relevance in occurrences:
+                    registry.add_occurrence(
+                        topic_id=topic_id,
+                        chunk_id=chunk_id,
+                        book_slug=book_slug,
+                        relevance=relevance,
+                    )
+                topic_count += 1
+
+            console.print(f"[dim]Topics extracted: {topic_count}[/dim]")
 
         progress.update(task, description="[green]Complete![/green]")
 
@@ -332,17 +368,122 @@ def subjects() -> None:
 
 
 @app.command()
-def topics() -> None:
+def topics(
+    subject: str = typer.Option(None, "--subject", "-S", help="Filter by subject"),
+    book: str = typer.Option(None, "--book", "-b", help="Filter by book slug"),
+) -> None:
     """List all topics in the knowledge base."""
-    console.print("[yellow]Topics:[/yellow]")
-    console.print("[dim]Topic support coming in Phase 2[/dim]")
+    from wyrd.core.topics import TopicRegistry
+
+    registry = TopicRegistry()
+
+    if book:
+        all_topics = registry.get_topics_for_book(book)
+        title = f"Topics in '{book}'"
+    else:
+        all_topics = registry.get_all_topics(subject=subject)
+        title = f"Topics in '{subject}'" if subject else "All Topics"
+
+    if not all_topics:
+        console.print("[dim]No topics found.[/dim]")
+        console.print("[dim]Topics are extracted when you add books with --extract-topics.[/dim]")
+        return
+
+    console.print(f"[bold]{title}:[/bold]\n")
+
+    table = Table()
+    table.add_column("Topic", style="cyan")
+    table.add_column("Subject", style="magenta")
+    table.add_column("Books", justify="right")
+    table.add_column("Chunks", justify="right")
+
+    for topic in all_topics:
+        table.add_row(
+            topic.display_name,
+            topic.subject,
+            str(topic.book_count),
+            str(topic.chunk_count),
+        )
+
+    console.print(table)
 
 
 @app.command()
-def concepts() -> None:
-    """List all concepts in the knowledge graph."""
-    console.print("[yellow]Concepts:[/yellow]")
-    console.print("[dim]Knowledge graph support coming in Phase 2[/dim]")
+def concepts(
+    query: str = typer.Argument(None, help="Search for a concept"),
+    book: str = typer.Option(None, "--book", "-b", help="Filter by book slug"),
+    related: str = typer.Option(None, "--related", "-r", help="Show concepts related to this one"),
+) -> None:
+    """List or search concepts in the knowledge graph."""
+    from wyrd.core.indexing import KnowledgeGraph
+
+    graph = KnowledgeGraph()
+    concept_count, edge_count = graph.count()
+
+    if concept_count == 0:
+        console.print("[dim]No concepts in the knowledge graph.[/dim]")
+        console.print("[dim]Concepts can be added manually or extracted from books.[/dim]")
+        return
+
+    if related:
+        # Show concepts related to a specific concept
+        concept = graph.get_concept(related)
+        if not concept:
+            console.print(f"[red]Error:[/red] Concept '{related}' not found")
+            raise typer.Exit(1)
+
+        console.print(f"[bold]Concepts related to '{concept.display_name}':[/bold]\n")
+        relations = graph.get_related_concepts(related, depth=1)
+
+        if not relations:
+            console.print("[dim]No related concepts found.[/dim]")
+            return
+
+        for rel_concept, rel_type, weight in relations:
+            console.print(f"  [cyan]{rel_concept.display_name}[/cyan] ({rel_type})")
+            if rel_concept.description:
+                console.print(f"    [dim]{rel_concept.description}[/dim]")
+
+    elif query:
+        # Search for concepts
+        results = graph.search_concepts(query)
+        if not results:
+            console.print(f"[dim]No concepts matching '{query}'.[/dim]")
+            return
+
+        console.print(f"[bold]Concepts matching '{query}':[/bold]\n")
+        for concept in results:
+            console.print(f"  [cyan]{concept.display_name}[/cyan] [{concept.id}]")
+            if concept.description:
+                console.print(f"    [dim]{concept.description}[/dim]")
+            if concept.source_book:
+                console.print(f"    [dim]Source: {concept.source_book}[/dim]")
+
+    elif book:
+        # List concepts from a specific book
+        all_concepts = graph.get_concepts_by_book(book)
+        if not all_concepts:
+            console.print(f"[dim]No concepts found for book '{book}'.[/dim]")
+            return
+
+        console.print(f"[bold]Concepts from '{book}':[/bold]\n")
+        for concept in all_concepts:
+            console.print(f"  [cyan]{concept.display_name}[/cyan]")
+            if concept.description:
+                console.print(f"    [dim]{concept.description}[/dim]")
+
+    else:
+        # List all concepts
+        all_concepts = graph.get_all_concepts()
+        console.print(f"[bold]Knowledge Graph:[/bold] {concept_count} concepts, {edge_count} relationships\n")
+
+        for concept in all_concepts[:20]:  # Limit to first 20
+            console.print(f"  [cyan]{concept.display_name}[/cyan] [{concept.id}]")
+            if concept.source_book:
+                console.print(f"    [dim]Source: {concept.source_book}[/dim]")
+
+        if len(all_concepts) > 20:
+            console.print(f"\n[dim]...and {len(all_concepts) - 20} more. Use --query to search.[/dim]")
 
 
 def cli() -> None:

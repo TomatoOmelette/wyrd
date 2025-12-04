@@ -273,20 +273,20 @@ class TestBuildCommand:
 class TestTopicsCommand:
     """Tests for topics command."""
 
-    def test_topics_phase2_message(self):
-        """Topics shows Phase 2 message."""
+    def test_topics_empty_message(self):
+        """Topics shows empty message when no topics."""
         result = runner.invoke(app, ["topics"])
 
         assert result.exit_code == 0
-        assert "Phase 2" in result.output
+        assert "No topics found" in result.output
 
 
 class TestConceptsCommand:
     """Tests for concepts command."""
 
-    def test_concepts_phase2_message(self):
-        """Concepts shows Phase 2 message."""
+    def test_concepts_empty_message(self):
+        """Concepts shows empty message when no concepts."""
         result = runner.invoke(app, ["concepts"])
 
         assert result.exit_code == 0
-        assert "Phase 2" in result.output
+        assert "No concepts" in result.output
