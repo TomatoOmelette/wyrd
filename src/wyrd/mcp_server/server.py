@@ -9,6 +9,7 @@ from mcp.types import TextContent, Tool
 
 from wyrd.core.indexing import MetadataStore
 from wyrd.core.retrieval import SemanticSearch, SearchResult
+from wyrd.core.synthesis import Synthesizer, format_advice, format_comparison
 
 
 # Create the MCP server
@@ -17,6 +18,7 @@ server = Server("wyrd")
 # Lazy-loaded instances
 _search_engine: SemanticSearch | None = None
 _metadata_store: MetadataStore | None = None
+_synthesizer: Synthesizer | None = None
 
 
 def get_search_engine() -> SemanticSearch:
@@ -33,6 +35,14 @@ def get_metadata_store() -> MetadataStore:
     if _metadata_store is None:
         _metadata_store = MetadataStore()
     return _metadata_store
+
+
+def get_synthesizer() -> Synthesizer:
+    """Get or create the synthesizer."""
+    global _synthesizer
+    if _synthesizer is None:
+        _synthesizer = Synthesizer()
+    return _synthesizer
 
 
 @server.list_tools()
@@ -104,6 +114,71 @@ async def list_tools() -> list[Tool]:
                         "default": "summaries",
                     },
                 },
+            },
+        ),
+        Tool(
+            name="get_advice",
+            description=(
+                "Get synthesized advice on a question from the knowledge base. "
+                "This tool retrieves relevant passages, deduplicates similar content, "
+                "and returns a synthesized response with key points and citations. "
+                "More efficient than raw search for getting actionable advice."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The question to get advice on",
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": "Subject/collection to search within (e.g., 'parenting', 'networking')",
+                    },
+                    "sources": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of book slugs to limit search to",
+                    },
+                    "perspective": {
+                        "type": "string",
+                        "enum": ["unified", "by_source"],
+                        "description": (
+                            "How to present the advice: 'unified' (single synthesized answer), "
+                            "'by_source' (grouped by book). Default: unified"
+                        ),
+                        "default": "unified",
+                    },
+                },
+                "required": ["question"],
+            },
+        ),
+        Tool(
+            name="compare_sources",
+            description=(
+                "Compare how different sources in the library approach a topic. "
+                "Highlights agreements (where sources align) and differences "
+                "(unique perspectives from each source). Useful for understanding "
+                "different viewpoints on a topic."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "The topic to compare across sources",
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": "Subject/collection to search within",
+                    },
+                    "sources": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of book slugs to compare (default: all books in subject)",
+                    },
+                },
+                "required": ["topic"],
             },
         ),
     ]
@@ -233,6 +308,93 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
         except Exception as e:
             return [TextContent(type="text", text=f"Error exploring library: {e}")]
+
+    elif name == "get_advice":
+        question = arguments.get("question", "")
+        subject = arguments.get("subject")
+        sources = arguments.get("sources")
+        perspective = arguments.get("perspective", "unified")
+
+        if not question:
+            return [TextContent(type="text", text="Error: question is required")]
+
+        try:
+            search_engine = get_search_engine()
+            synthesizer = get_synthesizer()
+
+            # Retrieve more results for synthesis (we'll dedupe)
+            results = search_engine.search(
+                query=question,
+                n_results=20,  # Get more for better synthesis
+                book_slugs=sources,
+                subject=subject,
+            )
+
+            if perspective == "by_source":
+                perspectives = synthesizer.synthesize_by_source(question, results)
+                if not perspectives:
+                    return [TextContent(
+                        type="text",
+                        text=f"No relevant information found for: {question}"
+                    )]
+
+                output_parts = [f"Question: {question}\n"]
+                for p in perspectives:
+                    output_parts.append(f"\n{p.book_title} by {p.book_author}:")
+                    for point in p.key_points:
+                        output_parts.append(f"  - {point}")
+                    for cite in p.citations:
+                        output_parts.append(f"    {cite}")
+
+                return [TextContent(type="text", text="\n".join(output_parts))]
+
+            else:  # unified
+                advice = synthesizer.synthesize(question, results)
+                formatted = format_advice(advice)
+                return [TextContent(type="text", text=formatted)]
+
+        except Exception as e:
+            return [TextContent(type="text", text=f"Error getting advice: {e}")]
+
+    elif name == "compare_sources":
+        topic = arguments.get("topic", "")
+        subject = arguments.get("subject")
+        sources = arguments.get("sources")
+
+        if not topic:
+            return [TextContent(type="text", text="Error: topic is required")]
+
+        try:
+            search_engine = get_search_engine()
+            synthesizer = get_synthesizer()
+
+            # Retrieve results across sources
+            results = search_engine.search(
+                query=topic,
+                n_results=30,  # Get more for cross-source comparison
+                book_slugs=sources,
+                subject=subject,
+            )
+
+            if not results:
+                return [TextContent(
+                    type="text",
+                    text=f"No information found on topic: {topic}"
+                )]
+
+            comparison = synthesizer.compare_sources(topic, results)
+
+            if comparison.source_count < 2:
+                return [TextContent(
+                    type="text",
+                    text=f"Only {comparison.source_count} source(s) found. Need at least 2 sources to compare."
+                )]
+
+            formatted = format_comparison(comparison)
+            return [TextContent(type="text", text=formatted)]
+
+        except Exception as e:
+            return [TextContent(type="text", text=f"Error comparing sources: {e}")]
 
     else:
         return [TextContent(type="text", text=f"Unknown tool: {name}")]

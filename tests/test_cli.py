@@ -275,7 +275,12 @@ class TestTopicsCommand:
 
     def test_topics_empty_message(self):
         """Topics shows empty message when no topics."""
-        result = runner.invoke(app, ["topics"])
+        with patch("wyrd.core.topics.TopicRegistry") as MockRegistry:
+            mock_registry = MagicMock()
+            mock_registry.get_all_topics.return_value = []
+            MockRegistry.return_value = mock_registry
+
+            result = runner.invoke(app, ["topics"])
 
         assert result.exit_code == 0
         assert "No topics found" in result.output

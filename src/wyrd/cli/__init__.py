@@ -486,6 +486,84 @@ def concepts(
             console.print(f"\n[dim]...and {len(all_concepts) - 20} more. Use --query to search.[/dim]")
 
 
+# Create curation subcommand group
+curate_app = typer.Typer(
+    name="curate",
+    help="Human curation workflow commands.",
+    no_args_is_help=True,
+)
+app.add_typer(curate_app, name="curate")
+
+
+@curate_app.command("init")
+def curate_init(
+    slug: str = typer.Argument(..., help="Book slug to create templates for"),
+    output: str = typer.Option(None, "--output", "-o", help="Output directory (default: ./knowledge/sources/{slug})"),
+) -> None:
+    """Generate curation templates for a book."""
+    from wyrd.curation import generate_curation_template
+
+    if output:
+        book_dir = Path(output).expanduser().resolve()
+    else:
+        book_dir = Path("./knowledge/sources") / slug
+
+    if book_dir.exists():
+        console.print(f"[yellow]Warning:[/yellow] Directory already exists: {book_dir}")
+        confirm = typer.confirm("Overwrite existing files?")
+        if not confirm:
+            console.print("[dim]Cancelled[/dim]")
+            raise typer.Exit(0)
+
+    generate_curation_template(slug, book_dir)
+    console.print(f"[green]Created curation templates in:[/green] {book_dir}")
+    console.print("\n[dim]Edit the YAML files to add curated content, then run:[/dim]")
+    console.print(f"[dim]  wyrd curate validate {book_dir}[/dim]")
+    console.print(f"[dim]  wyrd curate import {book_dir}[/dim]")
+
+
+@curate_app.command("validate")
+def curate_validate(
+    path: str = typer.Argument(..., help="Path to curation directory"),
+) -> None:
+    """Validate curation files for a book."""
+    from wyrd.curation import format_validation_result, validate_book_directory
+
+    book_dir = Path(path).expanduser().resolve()
+
+    if not book_dir.exists():
+        console.print(f"[red]Error:[/red] Directory not found: {book_dir}")
+        raise typer.Exit(1)
+
+    result = validate_book_directory(book_dir)
+    console.print(format_validation_result(result))
+
+    if not result.valid:
+        raise typer.Exit(1)
+
+
+@curate_app.command("import")
+def curate_import(
+    path: str = typer.Argument(..., help="Path to curation directory"),
+    subject: str = typer.Option("general", "--subject", "-S", help="Subject for this book"),
+) -> None:
+    """Import curated content into the knowledge base."""
+    from wyrd.curation import CurationImporter, format_import_result
+
+    book_dir = Path(path).expanduser().resolve()
+
+    if not book_dir.exists():
+        console.print(f"[red]Error:[/red] Directory not found: {book_dir}")
+        raise typer.Exit(1)
+
+    importer = CurationImporter()
+    result = importer.import_from_directory(book_dir, subject=subject)
+    console.print(format_import_result(result))
+
+    if not result.success:
+        raise typer.Exit(1)
+
+
 def cli() -> None:
     """Entry point for the CLI."""
     app()
