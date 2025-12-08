@@ -15,8 +15,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --compile-bytecode || \
     uv sync --no-install-project --compile-bytecode
 
-# Copy source code
+# Copy source code and README (required by hatchling for build)
 COPY src/ ./src/
+COPY README.md ./
 
 # Install the project
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -35,6 +36,9 @@ WORKDIR /app
 
 # Copy the virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv
+
+# Copy the source code (needed for editable install via .pth file)
+COPY --from=builder /app/src /app/src
 
 # Set up PATH to use the virtual environment
 ENV PATH="/app/.venv/bin:$PATH"

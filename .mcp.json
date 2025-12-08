@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "wyrd": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-v", "/Users/jonathangreeley/repos/wyrd/storage:/app/storage",
+        "-v", "/Users/jonathangreeley/repos/wyrd/knowledge:/app/knowledge",
+        "wyrd:latest",
+        "serve",
+        "--transport",
+        "stdio"
+      ]
+    }
+  }
+}

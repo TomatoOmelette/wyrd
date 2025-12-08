@@ -32,6 +32,7 @@ uv.lock
 # IDE
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 *~
@@ -50,8 +51,10 @@ htmlcov/
 .ipynb_checkpoints/
 
 # Wyrd-specific
-storage/              # Generated indexes
-knowledge/            # User content (keep empty template dirs)
+# Generated indexes
+storage/
+# User content (keep empty template dirs)
+knowledge/
 !knowledge/.gitkeep
 !knowledge/sources/.gitkeep
 !knowledge/topics/.gitkeep
