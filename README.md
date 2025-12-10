@@ -67,6 +67,8 @@ wyrd serve --transport stdio
 | `wyrd remove <slug>` | Remove a book |
 | `wyrd list` | List all books |
 | `wyrd search <query>` | Search the knowledge base |
+| `wyrd chapters <slug>` | List chapters in a book |
+| `wyrd summarize <slug> <chapter>` | Summarize a chapter using an LLM |
 | `wyrd serve` | Start the MCP server |
 | `wyrd build` | Build/rebuild indexes |
 | `wyrd subjects` | List all subjects |
@@ -104,6 +106,16 @@ wyrd serve \
   --host 0.0.0.0 \
   --port 8000
 ```
+
+### Summarize Options
+
+```bash
+wyrd summarize my-book 1 \
+  --provider ollama \       # or openai, anthropic
+  --model llama3.2          # Provider-specific model
+```
+
+Summarization uses `WYRD_SYNTHESIS_PROVIDER` env var by default. Falls back to rule-based extraction if no LLM is configured.
 
 ### Curation Commands
 

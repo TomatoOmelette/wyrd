@@ -349,6 +349,110 @@ def search(
 
 
 @app.command()
+def chapters(
+    book: str = typer.Argument(..., help="Book slug"),
+) -> None:
+    """List chapters in a book."""
+    from wyrd.core.indexing import MetadataStore
+
+    metadata_store = MetadataStore()
+
+    book_record = metadata_store.get_book(book)
+    if not book_record:
+        console.print(f"[red]Error:[/red] Book not found: {book}")
+        raise typer.Exit(1)
+
+    chapter_list = metadata_store.get_chapters(book)
+    if not chapter_list:
+        console.print(f"[dim]No chapters found for '{book}'.[/dim]")
+        return
+
+    console.print(f"[bold]{book_record.title}[/bold] by {book_record.author}\n")
+
+    table = Table()
+    table.add_column("#", style="cyan", justify="right")
+    table.add_column("Title")
+
+    for ch in chapter_list:
+        table.add_row(str(ch.number), ch.title or "(untitled)")
+
+    console.print(table)
+
+
+@app.command()
+def summarize(
+    book: str = typer.Argument(..., help="Book slug"),
+    chapter: int = typer.Argument(..., help="Chapter number to summarize"),
+    provider: str = typer.Option(None, "--provider", "-p", help="LLM provider (ollama, openai, anthropic)"),
+    model: str = typer.Option(None, "--model", "-m", help="Model name (provider-specific)"),
+) -> None:
+    """Summarize a chapter using an LLM."""
+    from wyrd.core.indexing import MetadataStore, VectorStore
+    from wyrd.core.synthesis import LLMSummarizer, format_chapter_summary
+
+    metadata_store = MetadataStore()
+    vector_store = VectorStore()
+
+    # Verify book exists
+    book_record = metadata_store.get_book(book)
+    if not book_record:
+        console.print(f"[red]Error:[/red] Book not found: {book}")
+        raise typer.Exit(1)
+
+    # Get chapters to verify chapter number and get title
+    chapters = metadata_store.get_chapters(book)
+    chapter_record = None
+    for ch in chapters:
+        if ch.number == chapter:
+            chapter_record = ch
+            break
+
+    if not chapter_record:
+        console.print(f"[red]Error:[/red] Chapter {chapter} not found in '{book}'")
+        console.print(f"[dim]Available chapters: {', '.join(str(ch.number) for ch in chapters)}[/dim]")
+        raise typer.Exit(1)
+
+    # Get chunks for this chapter
+    chunks = vector_store.get_chunks_by_chapter(book, chapter)
+    if not chunks:
+        console.print(f"[red]Error:[/red] No content found for chapter {chapter}")
+        raise typer.Exit(1)
+
+    console.print(f"[yellow]Summarizing:[/yellow] {book_record.title}")
+    console.print(f"[dim]Chapter {chapter}: {chapter_record.title}[/dim]")
+    console.print(f"[dim]Processing {len(chunks)} chunks...[/dim]\n")
+
+    # Summarize
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Generating summary...", total=None)
+
+        try:
+            summarizer = LLMSummarizer(provider=provider, model=model)
+            summary = summarizer.summarize_chapter(
+                book_slug=book,
+                chapter_number=chapter,
+                chapter_title=chapter_record.title,
+                chunks=chunks,
+            )
+            progress.update(task, description="[green]Complete![/green]")
+        except ImportError as e:
+            progress.update(task, description="[red]Error[/red]")
+            console.print(f"\n[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+        except Exception as e:
+            progress.update(task, description="[red]Error[/red]")
+            console.print(f"\n[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+
+    console.print()
+    console.print(format_chapter_summary(summary))
+
+
+@app.command()
 def subjects() -> None:
     """List all subjects in the knowledge base."""
     from wyrd.core.indexing import MetadataStore

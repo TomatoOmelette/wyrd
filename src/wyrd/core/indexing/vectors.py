@@ -163,3 +163,43 @@ class VectorStore:
             return len(results["ids"]) if results["ids"] else 0
         else:
             return self.collection.count()
+
+    def get_chunks_by_chapter(
+        self,
+        book_slug: str,
+        chapter_number: int,
+    ) -> list[dict]:
+        """
+        Get all chunks for a specific chapter.
+
+        Args:
+            book_slug: The book identifier
+            chapter_number: The chapter number
+
+        Returns:
+            List of chunk dicts with id, content, and metadata
+        """
+        results = self.collection.get(
+            where={
+                "$and": [
+                    {"book_slug": {"$eq": book_slug}},
+                    {"chapter_number": {"$eq": chapter_number}},
+                ]
+            },
+            include=["documents", "metadatas"],
+        )
+
+        output = []
+        if results["ids"]:
+            for i, chunk_id in enumerate(results["ids"]):
+                output.append(
+                    {
+                        "id": chunk_id,
+                        "content": results["documents"][i] if results["documents"] else None,
+                        "metadata": results["metadatas"][i] if results["metadatas"] else {},
+                    }
+                )
+
+        # Sort by position within chapter
+        output.sort(key=lambda x: x["metadata"].get("position", 0))
+        return output
