@@ -27,15 +27,18 @@ ENV/
 
 # uv
 .uv/
-uv.lock
 
 # IDE
 .idea/
 .vscode/
-.claude/
 *.swp
 *.swo
 *~
+
+# Claude Code
+.claude/
+CLAUDE.md
+CLAUDE.local.md
 
 # Testing
 .pytest_cache/
@@ -44,7 +47,8 @@ htmlcov/
 .tox/
 .nox/
 
-# Type checking
+# Linting / type checking
+.ruff_cache/
 .mypy_cache/
 
 # Jupyter
@@ -69,6 +73,9 @@ sources/
 .env
 .env.local
 .env.*.local
+
+# Local MCP config (contains user-specific absolute paths)
+.mcp.json
 
 # OS
 .DS_Store
